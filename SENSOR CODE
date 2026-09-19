@@ -1,0 +1,83 @@
+#include <SPI.h>
+#include <LoRa.h>
+
+// --- SENSOR PINS ---
+#define TRIG_PIN 2
+#define ECHO_PIN 3
+
+// --- LORA PINS ---
+#define ss 10
+#define rst 9
+#define dio0 4
+
+void setup() {
+  // Start Serial Monitor
+  Serial.begin(9600);
+  while (!Serial);
+
+  Serial.println("=========================================");
+  Serial.println(" ARDUINO EDGE NODE: SENSOR + LORA TEST   ");
+  Serial.println("=========================================");
+
+  // Setup Sensor Pins
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  // Setup LoRa Pins
+  LoRa.setPins(ss, rst, dio0);
+
+  // Start LoRa Radio at 433 MHz
+  if (!LoRa.begin(433E6)) {
+    Serial.println("LoRa initialization failed. Check wiring!");
+    while (1); // Halt execution if LoRa fails to boot
+  }
+  
+  // --- THE MINIMUM POWER HACK ---
+  LoRa.setTxPower(2); // Prevents amplifier damage without an antenna
+  
+  Serial.println("LoRa Initialized Successfully at Minimum Power!");
+  delay(1000);
+}
+
+void loop() {
+  // 1. Clear the trigger pin completely
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(5);
+
+  // 2. Fire the extended 20-microsecond ultrasonic pulse
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(20);
+  digitalWrite(TRIG_PIN, LOW);
+
+  // 3. Listen for the physical echo
+  long duration = pulseIn(ECHO_PIN, HIGH, 50000); 
+  
+  // 4. Calculate Distance and Apply Blind Zone Filters
+  int distance = 0;
+  
+  if (duration == 0) {
+    Serial.println("Reading: TIMEOUT / DEAD SILENCE");
+    distance = -1; // -1 indicates an error state to the receiver
+  } else {
+    distance = duration * 0.034 / 2;
+    
+    // The sensor cannot read properly inside 20cm
+    if (distance < 20 || distance > 600) {
+      distance = -1;
+      Serial.println("Reading: Out of Range / Too Close (Blind Zone)");
+    } else {
+      Serial.print("Reading: ");
+      Serial.print(distance);
+      Serial.println(" cm");
+    }
+  }
+
+  // 5. Transmit Real Hardware Data Over LoRa
+  LoRa.beginPacket();
+  LoRa.print("DIST:");
+  LoRa.print(distance);
+  LoRa.endPacket();
+
+  // Wait 1 second before firing the next ping
+  delay(1000);
+}

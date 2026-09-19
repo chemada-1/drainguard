@@ -1,0 +1,524 @@
+#include <SPI.h>
+#include <LoRa.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <WiFiUdp.h>
+#include <ESPmDNS.h>
+#include <Preferences.h>
+#include <DNSServer.h> // Added for Captive Portal
+
+// --- ESP32 LORA PINS ---
+#define ss 5
+#define rst 14  
+#define dio0 2
+
+// --- ADMIN CREDENTIALS ---
+const char* adminEmail = "admin@drainguard.com";
+const char* adminPass = "admin123";
+
+// --- NETWORK & SERVER CONFIG ---
+WebServer server(80);
+WiFiUDP udp;
+Preferences preferences;
+DNSServer dnsServer; // Added for Captive Portal
+
+const byte DNS_PORT = 53;
+const int udpPort = 8080;
+String lastData = "No data yet";
+int lastRSSI = 0;
+String networkStatus = "Initializing...";
+bool isCaptivePortal = false;
+
+// --- DEBUG TIMER ---
+unsigned long lastDebugTime = 0;
+
+// --- JSON EXTRACTION HELPER (No external libraries required) ---
+String extractJsonValue(String json, String key) {
+  int keyIndex = json.indexOf("\"" + key + "\":");
+  if (keyIndex == -1) return "";
+  int valStart = json.indexOf("\"", keyIndex + key.length() + 2) + 1;
+  int valEnd = json.indexOf("\"", valStart);
+  return json.substring(valStart, valEnd);
+}
+
+// --- 1. LOGIN PAGE HTML (Windows 11 Fluent) ---
+const char login_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html lang="en"><head>
+  <title>DrainGuard Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: linear-gradient(135deg, #005A9E 0%, #0078D4 50%, #00A4EF 100%); }
+    .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(16px); }
+  </style>
+</head>
+<body class="h-screen flex items-center justify-center p-4">
+  <div class="glass p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center transform transition-all">
+    <div class="w-16 h-16 bg-[#0078D4] rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-lg">
+      <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+    </div>
+    <h2 class="text-2xl font-extrabold text-slate-800 mb-6">DrainGuard Admin</h2>
+    <form action="/auth" method="POST" class="space-y-4">
+      <input type="email" name="email" placeholder="Email Address" required class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/50 focus:ring-2 focus:ring-[#0078D4] outline-none transition-all">
+      <input type="password" name="password" placeholder="Password" required class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/50 focus:ring-2 focus:ring-[#0078D4] outline-none transition-all">
+      <input type="submit" value="Sign In" class="w-full bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold py-3 rounded-xl cursor-pointer transition-colors shadow-md">
+    </form>
+    <div class="my-6 border-t border-slate-200"></div>
+    <a href="/dashboard" class="block w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors">View Live Dashboard (Guest)</a>
+  </div>
+</body>
+</html>
+)rawliteral";
+
+// --- 2. GUEST DASHBOARD HTML (Windows 11 Full UI) ---
+const char dashboard_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - DrainGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .fluent-card { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .fluent-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -10px rgba(0, 120, 212, 0.15), 0 10px 15px -5px rgba(0, 120, 212, 0.05); }
+        .fluent-btn { transition: all 0.2s ease-in-out; }
+        .fluent-btn:active { transform: scale(0.97); }
+        .win11-gradient-bg { background: linear-gradient(135deg, #005A9E 0%, #0078D4 50%, #00A4EF 100%); }
+        .win11-gradient-text { background: linear-gradient(135deg, #005A9E 0%, #0078D4 50%, #00A4EF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    </style>
+</head>
+<body class="bg-[#F8FAFC] text-slate-800 font-sans h-screen flex overflow-hidden relative selection:bg-blue-200">
+    <div class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-gradient-to-br from-[#0078D4] to-[#28A8EA] rounded-full mix-blend-multiply filter blur-[160px] opacity-20 pointer-events-none"></div>
+    <div class="absolute bottom-[-20%] right-[-10%] w-[700px] h-[700px] bg-gradient-to-tr from-[#00A4EF] to-[#005A9E] rounded-full mix-blend-multiply filter blur-[180px] opacity-15 pointer-events-none"></div>
+
+    <div id="disconnectedOverlay" class="absolute inset-0 bg-white/60 backdrop-blur-xl z-50 flex flex-col items-center justify-center transition-opacity duration-500 opacity-0 pointer-events-none hidden">
+        <div class="bg-white/80 p-10 rounded-3xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex flex-col items-center max-w-md text-center transform scale-95 transition-transform duration-500" id="disconnectedModal">
+            <div class="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center mb-6 shadow-inner">
+                <svg class="w-10 h-10 text-[#0078D4]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"></path></svg>
+            </div>
+            <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight mb-2">DrainGuard not connected</h2>
+            <p class="text-slate-500 text-sm font-medium mb-8">The dashboard cannot communicate with the receiver node. Please ensure the ESP32 is powered on.</p>
+        </div>
+    </div>
+
+    <aside class="w-64 backdrop-blur-2xl bg-white/70 border-r border-white flex flex-col justify-between z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+        <div>
+            <div class="p-8 flex items-center">
+                <div class="w-8 h-8 rounded-lg win11-gradient-bg shadow-sm flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <span class="text-xl font-extrabold text-slate-800 tracking-tight">DrainGuard</span>
+            </div>
+            <nav class="mt-4 px-4 space-y-2">
+                <a href="/dashboard" class="fluent-btn flex items-center px-4 py-3 win11-gradient-bg rounded-xl text-white relative overflow-hidden group shadow-md">
+                    <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-r-full shadow-sm"></div>
+                    <span class="ml-3 font-semibold text-sm">Live Dashboard</span>
+                </a>
+            </nav>
+        </div>
+        <div class="p-6">
+            <a href="/" class="flex items-center justify-between p-3 rounded-xl bg-white/60 border border-white hover:bg-white transition-colors group shadow-sm text-center">
+                <span class="text-sm font-bold text-[#0078D4] w-full">Back to Login</span>
+            </a>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col overflow-y-auto relative z-10">
+        <header class="px-10 py-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">System Overview</h1>
+                <p class="text-sm text-slate-500 font-medium mt-1">Real-time telemetry and flood thresholds</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="px-5 py-2.5 backdrop-blur-md bg-white/80 rounded-xl border border-white text-sm font-bold text-[#0078D4] shadow-sm flex items-center gap-2">
+                    <span id="currentDate"></span>
+                </div>
+            </div>
+        </header>
+
+        <div class="px-10 pb-10 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="fluent-card backdrop-blur-xl bg-white/80 p-6 rounded-3xl border border-white shadow-sm flex flex-col relative overflow-hidden">
+                    <span class="text-xs win11-gradient-text font-extrabold uppercase tracking-wider">Distance Reading</span>
+                    <div class="flex items-end justify-between mt-4">
+                        <span class="text-4xl font-extrabold text-slate-800" id="valDistance">-- cm</span>
+                        <div class="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0078D4] text-lg">📏</div>
+                    </div>
+                </div>
+                <div class="fluent-card backdrop-blur-xl bg-white/80 p-6 rounded-3xl border border-white shadow-sm flex flex-col relative overflow-hidden">
+                    <span class="text-xs text-slate-500 font-bold uppercase tracking-wider">System Status</span>
+                    <div class="flex items-end justify-between mt-4">
+                        <span class="text-xl font-extrabold text-slate-800 whitespace-nowrap" id="valStatus">AWAITING</span>
+                        <div class="w-10 h-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 text-lg flex-shrink-0 ml-2" id="iconStatus">⏳</div>
+                    </div>
+                </div>
+                <div class="fluent-card backdrop-blur-xl bg-white/80 p-6 rounded-3xl border border-white shadow-sm flex flex-col relative overflow-hidden">
+                    <span class="text-xs text-slate-500 font-bold uppercase tracking-wider">Radio Signal</span>
+                    <div class="flex items-end justify-between mt-4">
+                        <span class="text-4xl font-extrabold text-slate-800" id="valRSSI">-- dBm</span>
+                        <div class="w-10 h-10 rounded-full bg-cyan-50 border border-cyan-100 flex items-center justify-center text-[#00A4EF] text-lg">📡</div>
+                    </div>
+                </div>
+                <div class="fluent-card backdrop-blur-xl bg-white/80 p-6 rounded-3xl border border-white shadow-sm flex flex-col relative overflow-hidden">
+                    <span class="text-xs text-slate-500 font-bold uppercase tracking-wider">Node Battery</span>
+                    <div class="flex items-end justify-between mt-4">
+                        <span class="text-4xl font-extrabold text-slate-800" id="valBattery">-- %</span>
+                        <div class="w-10 h-10 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 text-lg">🔋</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fluent-card backdrop-blur-xl bg-white/80 p-8 rounded-3xl border border-white shadow-sm">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="text-xl font-extrabold text-slate-800 tracking-tight" id="chartTitle">Live Telemetry (Local Node)</h3>
+                        <p class="text-xs text-slate-500 font-medium mt-1">Y-Axis represents rising water depth (0 cm = Empty, 200 cm = Overflow)</p>
+                    </div>
+                    <span class="flex items-center text-xs font-bold text-white win11-gradient-bg px-4 py-1.5 rounded-full shadow-sm">
+                        <span class="w-2 h-2 rounded-full bg-white animate-pulse mr-2"></span> LIVE
+                    </span>
+                </div>
+                <div class="h-80 w-full relative"><canvas id="waterChart"></canvas></div>
+            </div>
+        </div>
+    </main>
+    <script>
+        const MAX_CANAL_DEPTH = 200; 
+        const MAX_CHART_POINTS = 30; 
+        let isConnected = true; 
+        document.getElementById('currentDate').innerText = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        
+        Chart.defaults.font.family = 'Inter, ui-sans-serif, system-ui, -apple-system, sans-serif';
+        const ctx = document.getElementById('waterChart').getContext('2d');
+        let gradientFill = ctx.createLinearGradient(0, 0, 0, 400);
+        gradientFill.addColorStop(0, 'rgba(0, 120, 212, 0.4)');
+        gradientFill.addColorStop(1, 'rgba(0, 164, 239, 0.0)');
+
+        const waterChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Water Height (cm)', data: [], borderColor: '#0078D4', backgroundColor: gradientFill, borderWidth: 3, pointBackgroundColor: '#FFFFFF', pointBorderColor: '#0078D4', pointBorderWidth: 2, pointRadius: 4, fill: true, tension: 0.4 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { max: MAX_CANAL_DEPTH, grid: { color: 'rgba(0,0,0,0.04)' } }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } }
+        });
+
+        const overlay = document.getElementById('disconnectedOverlay');
+        const modal = document.getElementById('disconnectedModal');
+
+        function toggleConnectionUI(connected) {
+            if (connected === isConnected) return; 
+            isConnected = connected;
+            if (!connected) {
+                overlay.classList.remove('hidden');
+                setTimeout(() => { overlay.classList.remove('opacity-0', 'pointer-events-none'); overlay.classList.add('opacity-100'); modal.classList.remove('scale-95'); modal.classList.add('scale-100'); }, 10);
+            } else {
+                overlay.classList.remove('opacity-100'); overlay.classList.add('opacity-0', 'pointer-events-none'); modal.classList.remove('scale-100'); modal.classList.add('scale-95');
+                setTimeout(() => { overlay.classList.add('hidden'); }, 500);
+            }
+        }
+
+        async function fetchSensorData() {
+            try {
+                const response = await fetch('/data');
+                if (!response.ok) throw new Error("Network issue");
+                const rawJson = await response.json();
+                toggleConnectionUI(true); 
+
+                let extractedDistance = 0, nodeStatus = "ONLINE";
+                if (rawJson.lastData === "No data yet" || rawJson.lastData === "") nodeStatus = "OFFLINE";
+                else if (rawJson.lastData.startsWith("DIST:")) extractedDistance = parseInt(rawJson.lastData.substring(5)); 
+
+                const data = { distance: extractedDistance, rssi: rawJson.lastRSSI, battery: 100, status: nodeStatus };
+                const rawDistance = data.distance;
+                let waterHeight = MAX_CANAL_DEPTH - rawDistance;
+                if (waterHeight < 0) waterHeight = 0;
+
+                document.getElementById('valDistance').innerText = rawDistance + ' cm';
+                document.getElementById('valRSSI').innerText = data.rssi + ' dBm';
+                document.getElementById('valBattery').innerText = data.battery + ' %';
+                
+                const statusIcon = document.getElementById('iconStatus');
+                const statusText = document.getElementById('valStatus');
+                
+                if (data.status === "OFFLINE") {
+                    statusText.innerText = "OFFLINE"; statusText.className = "text-xl font-extrabold text-slate-400";
+                    statusIcon.className = "w-10 h-10 rounded-full bg-slate-50 border flex items-center justify-center text-slate-400"; statusIcon.innerText = "✕";
+                } else if (rawDistance < 30 || waterHeight >= 170) {
+                    statusText.innerText = "CRITICAL"; statusText.className = "text-xl font-extrabold text-[#D13438] animate-pulse";
+                    statusIcon.className = "w-10 h-10 rounded-full bg-red-50 border flex items-center justify-center text-[#D13438] animate-pulse"; statusIcon.innerText = "⚠";
+                    waterChart.data.datasets[0].borderColor = '#D13438'; waterChart.data.datasets[0].pointBorderColor = '#D13438';
+                } else {
+                    statusText.innerText = "NORMAL"; statusText.className = "text-xl font-extrabold text-[#107C10]";
+                    statusIcon.className = "w-10 h-10 rounded-full bg-emerald-50 border flex items-center justify-center text-[#107C10]"; statusIcon.innerText = "✓";
+                    waterChart.data.datasets[0].borderColor = '#0078D4'; waterChart.data.datasets[0].pointBorderColor = '#0078D4';
+                }
+
+                if (data.status !== "OFFLINE") {
+                    const timeString = new Date().toLocaleTimeString('en-US', { hour12: false });
+                    waterChart.data.labels.push(timeString); waterChart.data.datasets[0].data.push(waterHeight);
+                    if (waterChart.data.labels.length > MAX_CHART_POINTS) { waterChart.data.labels.shift(); waterChart.data.datasets[0].data.shift(); }
+                    waterChart.update('active'); 
+                }
+            } catch(e) { toggleConnectionUI(false); }
+        }
+        fetchSensorData();
+        setInterval(fetchSensorData, 2000); 
+    </script>
+</body>
+</html>
+)rawliteral";
+
+// --- 3. PROTECTED ADMIN HTML (Windows 11 Fluent) ---
+const char admin_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html lang="en"><head>
+  <title>DrainGuard Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style> body { background: linear-gradient(135deg, #005A9E 0%, #0078D4 50%, #00A4EF 100%); } .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(16px); } </style>
+</head>
+<body class="h-screen flex items-center justify-center p-4">
+  <div class="glass p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center">
+    <h2 class="text-2xl font-extrabold text-slate-800 mb-2">Router Configuration</h2>
+    <p class="text-sm font-medium text-red-500 mb-6 bg-red-50 p-3 rounded-xl">%NETWORK_STATUS%</p>
+    <form action="/save" method="POST" class="space-y-4">
+      <input type="text" name="ssid" placeholder="New Wi-Fi Name" required class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/50 focus:ring-2 outline-none">
+      <input type="password" name="pass" placeholder="New Password" required class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/50 focus:ring-2 outline-none">
+      <input type="submit" value="Connect & Reboot" class="w-full bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold py-3 rounded-xl cursor-pointer shadow-md">
+    </form>
+    <div class="my-6 border-t border-slate-200"></div>
+    <a href="/logout" class="block w-full bg-red-100 hover:bg-red-200 text-red-600 font-bold py-3 rounded-xl">Logout</a>
+  </div>
+</body>
+</html>
+)rawliteral";
+
+// --- SECURITY HELPERS ---
+bool isAuthenticated() {
+  if (server.hasHeader("Cookie")) {
+    String cookie = server.header("Cookie");
+    if (cookie.indexOf("DG_SESSION=1") != -1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// --- WEB ROUTING ---
+void handleRoot() {
+  if (isAuthenticated()) {
+    server.sendHeader("Location", "/admin", true);
+    server.send(302);
+    return;
+  }
+  server.send(200, "text/html", login_html);
+}
+
+void handleAuth() {
+  if (server.hasArg("email") && server.hasArg("password")) {
+    if (server.arg("email") == adminEmail && server.arg("password") == adminPass) {
+      server.sendHeader("Set-Cookie", "DG_SESSION=1; Path=/; HttpOnly");
+      server.sendHeader("Location", "/admin", true);
+      server.send(302);
+      return;
+    }
+  }
+  server.send(401, "text/html", "<h2>Invalid Login</h2><a href='/'>Try Again</a>");
+}
+
+void handleLogout() {
+  server.sendHeader("Set-Cookie", "DG_SESSION=0; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+  server.sendHeader("Location", "/", true);
+  server.send(302);
+}
+
+void handleDashboard() {
+  server.send(200, "text/html", dashboard_html);
+}
+
+void handleData() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  String json = "{\"lastData\":\"" + lastData + "\", \"lastRSSI\":" + String(lastRSSI) + "}";
+  server.send(200, "application/json", json);
+}
+
+// NEW: Endpoint to receive configuration commands from Python Flask
+void handleApiConfig() {
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json", "{\"error\": \"No payload received\"}");
+    return;
+  }
+  
+  String body = server.arg("plain");
+  String new_sta_ssid = extractJsonValue(body, "sta_ssid");
+  String new_sta_pass = extractJsonValue(body, "sta_pass");
+  String new_ap_ssid = extractJsonValue(body, "ap_ssid");
+  String new_ap_pass = extractJsonValue(body, "ap_pass");
+
+  preferences.begin("wifi", false);
+  if (new_sta_ssid != "") preferences.putString("ssid", new_sta_ssid);
+  if (new_sta_pass != "") preferences.putString("pass", new_sta_pass);
+  if (new_ap_ssid != "") preferences.putString("ap_ssid", new_ap_ssid);
+  if (new_ap_pass != "") preferences.putString("ap_pass", new_ap_pass);
+  preferences.end();
+
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "application/json", "{\"success\": true}");
+  
+  delay(1500);
+  ESP.restart(); // Reboot to apply the new network settings
+}
+
+void handleAdmin() {
+  if (!isAuthenticated()) {
+    server.sendHeader("Location", "/", true);
+    server.send(302);
+    return;
+  }
+  String html = String(admin_html);
+  html.replace("%NETWORK_STATUS%", networkStatus);
+  server.send(200, "text/html", html);
+}
+
+void handleSaveCredentials() {
+  if (!isAuthenticated()) {
+    server.sendHeader("Location", "/", true);
+    server.send(302);
+    return;
+  }
+
+  if (server.hasArg("ssid") && server.hasArg("pass")) {
+    preferences.begin("wifi", false);
+    preferences.putString("ssid", server.arg("ssid"));
+    preferences.putString("pass", server.arg("pass"));
+    preferences.end();
+    
+    server.send(200, "text/html", "<h2 style='font-family:sans-serif; text-align:center; padding: 20px;'>Credentials Saved! Rebooting...</h2>");
+    delay(2000);
+    ESP.restart(); 
+  }
+}
+
+// Captive Portal Redirect
+void handleNotFound() {
+  server.sendHeader("Location", "/", true);
+  server.send(302, "text/plain", "");
+}
+
+void setup() {
+  Serial.begin(9600);
+  while (!Serial);
+
+  preferences.begin("wifi", true);
+  String savedSSID = preferences.getString("ssid", "");
+  String savedPass = preferences.getString("pass", "");
+  // Dynamic AP credentials with defaults
+  String apSSID = preferences.getString("ap_ssid", "DrainGuard-Offline");
+  String apPass = preferences.getString("ap_pass", "12345678");
+  preferences.end();
+
+  if (savedSSID != "") {
+    WiFi.mode(WIFI_STA); 
+    WiFi.begin(savedSSID.c_str(), savedPass.c_str());
+    int retries = 0;
+    while (WiFi.status() != WL_CONNECTED && retries < 20) {
+      delay(500);
+      retries++;
+    }
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_STA); 
+    networkStatus = "Connected to Router: " + WiFi.localIP().toString();
+    Serial.println("Online Mode Active. AP Shutdown.");
+  } else {
+    WiFi.mode(WIFI_AP); 
+    WiFi.softAP(apSSID.c_str(), apPass.c_str());
+    
+    // Start DNS server for Captive Portal
+    isCaptivePortal = true;
+    dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+    
+    networkStatus = "AP Fallback Active. Connect to configure.";
+    Serial.println("Offline Mode Active. AP Broadcasting.");
+  }
+
+  if (MDNS.begin("drainguard")) {
+    MDNS.addService("http", "tcp", 80);
+  }
+
+  const char* headerKeys[] = {"Cookie"};
+  server.collectHeaders(headerKeys, 1);
+
+  server.on("/", handleRoot);
+  server.on("/auth", HTTP_POST, handleAuth);
+  server.on("/logout", handleLogout);
+  server.on("/dashboard", handleDashboard); 
+  server.on("/data", handleData); 
+  server.on("/api/config", HTTP_POST, handleApiConfig); // New Backend Route
+  server.on("/admin", handleAdmin); 
+  server.on("/save", HTTP_POST, handleSaveCredentials); 
+  server.onNotFound(handleNotFound); // Captive Portal redirect
+  server.begin();
+
+  udp.begin(udpPort);
+
+  LoRa.setPins(ss, rst, dio0);
+  
+  if (!LoRa.begin(433E6)) {
+    Serial.println("[ERROR] Starting LoRa failed! Check physical wiring.");
+    while (1);
+  }
+  Serial.println("[SUCCESS] LoRa Initialized. Entering passive listen mode...");
+}
+
+void broadcastUDP(String data, int rssi) {
+  String jsonPayload = "{\"data\":\"" + data + "\", \"rssi\":" + String(rssi) + "}";
+  udp.beginPacket(IPAddress(255, 255, 255, 255), udpPort);
+  udp.print(jsonPayload);
+  udp.endPacket();
+}
+
+void loop() {
+  if (isCaptivePortal) {
+    dnsServer.processNextRequest(); // Required for Captive Portal to function
+  }
+  
+  server.handleClient();
+
+  unsigned long currentMillis = millis();
+  if (currentMillis - lastDebugTime >= 5000) {
+    Serial.println("[DEBUG] LoRa module is actively listening for incoming packets...");
+    
+    // NEW: Send a network heartbeat so the PC knows the ESP32 is still plugged in
+    broadcastUDP("SYS:HEARTBEAT", 0);
+    
+    lastDebugTime = currentMillis;
+  }
+
+  int packetSize = LoRa.parsePacket();
+  if (packetSize) {
+    String incoming = "";
+    while (LoRa.available()) {
+      incoming += (char)LoRa.read();
+    }
+
+    lastData = incoming;
+    lastRSSI = LoRa.packetRssi();
+
+    Serial.println("\n[>>>] INCOMING LORA PACKET CAUGHT [<<<]");
+    Serial.print("Raw Payload: ");
+    Serial.println(incoming);
+    Serial.print("Signal Strength (RSSI): ");
+    Serial.print(lastRSSI);
+    Serial.print(" dBm | SNR: ");
+    Serial.println(LoRa.packetSnr());
+    Serial.println("----------------------------------------\n");
+
+    broadcastUDP(incoming, lastRSSI);
+  }
+}

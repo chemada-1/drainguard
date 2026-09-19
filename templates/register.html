@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Node Manager - DrainGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 120, 212, 0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 120, 212, 0.4); }
+        .fluent-card { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .fluent-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -10px rgba(0, 120, 212, 0.2), 0 10px 15px -5px rgba(0, 120, 212, 0.08); }
+        .fluent-btn { transition: all 0.2s ease-in-out; }
+        .fluent-btn:active { transform: scale(0.97); }
+        .win11-gradient-bg { background: linear-gradient(135deg, rgba(0, 90, 158, 0.85) 0%, rgba(0, 120, 212, 0.85) 50%, rgba(0, 164, 239, 0.85) 100%); backdrop-filter: blur(12px); }
+    </style>
+</head>
+<body class="bg-[#EEF2F6] text-slate-800 font-sans h-screen flex overflow-hidden relative selection:bg-blue-200">
+    
+    <!-- Translucent Windows 11 Bloom Ambient Blobs -->
+    <div class="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] bg-blue-400/30 rounded-full mix-blend-multiply filter blur-[140px] pointer-events-none animate-pulse"></div>
+    <div class="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] bg-cyan-400/25 rounded-full mix-blend-multiply filter blur-[160px] pointer-events-none animate-pulse" style="animation-delay: 3s;"></div>
+
+    <!-- Left Translucent Sidebar -->
+    <aside class="w-64 backdrop-blur-3xl bg-white/50 border-r border-white/60 flex flex-col justify-between z-10 shadow-[4px_0_24px_rgba(0,0,0,0.01)]">
+        <div>
+            <div class="p-8 flex items-center">
+                <div class="w-8 h-8 rounded-lg win11-gradient-bg shadow-md flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <span class="text-xl font-extrabold text-slate-800 tracking-tight">DrainGuard</span>
+            </div>
+            
+            <nav class="mt-4 px-4 space-y-2">
+                <a href="/" class="fluent-btn flex items-center px-4 py-3 rounded-xl hover:bg-white/40 text-slate-600 hover:text-slate-900 transition-colors">
+                    <span class="ml-3 font-medium text-sm">Live Dashboard</span>
+                </a>
+                <a href="/history" class="fluent-btn flex items-center px-4 py-3 rounded-xl hover:bg-white/40 text-slate-600 hover:text-slate-900 transition-colors">
+                    <span class="ml-3 font-medium text-sm">Event History</span>
+                </a>
+                <a href="/nodes" class="fluent-btn flex items-center px-4 py-3 win11-gradient-bg rounded-xl shadow-md text-white relative overflow-hidden group">
+                    <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-r-full shadow-sm"></div>
+                    <span class="ml-3 font-semibold text-sm">Node Manager</span>
+                </a>
+                <a href="/receiver" class="fluent-btn flex items-center px-4 py-3 rounded-xl hover:bg-white/40 text-slate-600 hover:text-slate-900 transition-colors">
+                    <span class="ml-3 font-medium text-sm">Receiver Config</span>
+                </a>
+            </nav>
+        </div>
+        
+        <div class="p-6">
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/40 border border-white/60 hover:bg-white/70 transition-colors cursor-pointer group shadow-sm">
+                <div class="flex items-center overflow-hidden">
+                    <div class="w-9 h-9 rounded-full win11-gradient-bg text-white font-bold flex items-center justify-center shadow-sm text-sm">SA</div>
+                    <div class="ml-3 truncate">
+                        <p class="text-xs font-bold text-slate-800 truncate">System Admin</p>
+                        <p class="text-[10px] text-[#0078D4] font-semibold">Active Session</p>
+                    </div>
+                </div>
+                <a href="/logout" class="text-slate-400 group-hover:text-red-500 transition-colors ml-2" title="Logout">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col overflow-y-auto relative z-10 p-10">
+        <header class="mb-10">
+            <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">Node Manager</h1>
+            <p class="text-sm text-slate-500 font-medium mt-1">Register and manage LoRa transmitter nodes.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Add Node Form -->
+            <div class="fluent-card backdrop-blur-2xl bg-white/60 p-8 rounded-3xl border border-white/80 shadow-sm h-fit">
+                <h2 class="text-xl font-extrabold text-slate-800 mb-6">Register New Node</h2>
+                <form action="/nodes" method="POST" class="space-y-5">
+                    <input type="hidden" name="action" value="add">
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Node ID (Number)</label>
+                        <input type="number" name="node_id" required class="w-full px-4 py-3 rounded-xl border border-white/80 bg-white/50 backdrop-blur-md focus:ring-2 focus:ring-[#0078D4] outline-none transition-all" placeholder="e.g., 2">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Location / Name</label>
+                        <input type="text" name="node_name" required class="w-full px-4 py-3 rounded-xl border border-white/80 bg-white/50 backdrop-blur-md focus:ring-2 focus:ring-[#0078D4] outline-none transition-all" placeholder="e.g., Backup Sensor">
+                    </div>
+                    
+                    <button type="submit" class="w-full win11-gradient-bg hover:opacity-95 text-white font-bold py-3 rounded-xl cursor-pointer transition-all shadow-md mt-4">
+                        Save Node
+                    </button>
+                </form>
+            </div>
+
+            <!-- Registered Nodes Table -->
+            <div class="lg:col-span-2 fluent-card backdrop-blur-2xl bg-white/60 p-8 rounded-3xl border border-white/80 shadow-sm">
+                <h2 class="text-xl font-extrabold text-slate-800 mb-6">Active Nodes</h2>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-200/60">
+                                <th class="pb-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Node ID</th>
+                                <th class="pb-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Location / Name</th>
+                                <th class="pb-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-sm font-medium text-slate-700">
+                            {% for node in nodes %}
+                            <tr class="border-b border-slate-100/60 hover:bg-white/40 transition-colors">
+                                <td class="py-4">Node-{{ node[0] }}</td>
+                                <td class="py-4 font-bold text-slate-800">{{ node[1] }}</td>
+                                <td class="py-4 text-right">
+                                    <form action="/nodes" method="POST" class="inline">
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="node_id" value="{{ node[0] }}">
+                                        <button type="submit" class="text-red-500 hover:text-red-700 font-bold px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="py-6 text-center text-slate-400 font-medium">No nodes registered. Add one to start collecting data.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

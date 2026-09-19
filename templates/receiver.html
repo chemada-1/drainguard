@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receiver Config - DrainGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 120, 212, 0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 120, 212, 0.4); }
+        .fluent-card { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .fluent-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -10px rgba(0, 120, 212, 0.2), 0 10px 15px -5px rgba(0, 120, 212, 0.08); }
+        .fluent-btn { transition: all 0.2s ease-in-out; }
+        .fluent-btn:active { transform: scale(0.97); }
+        .win11-gradient-bg { background: linear-gradient(135deg, rgba(0, 90, 158, 0.85) 0%, rgba(0, 120, 212, 0.85) 50%, rgba(0, 164, 239, 0.85) 100%); backdrop-filter: blur(12px); }
+    </style>
+</head>
+<body class="bg-[#EEF2F6] text-slate-800 font-sans h-screen flex overflow-hidden relative selection:bg-blue-200">
+    
+    <!-- Translucent Windows 11 Bloom Ambient Blobs -->
+    <div class="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] bg-blue-400/30 rounded-full mix-blend-multiply filter blur-[140px] pointer-events-none animate-pulse"></div>
+    <div class="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] bg-cyan-400/25 rounded-full mix-blend-multiply filter blur-[160px] pointer-events-none animate-pulse" style="animation-delay: 3s;"></div>
+
+    <!-- Left Translucent Sidebar -->
+    <aside class="w-64 backdrop-blur-3xl bg-white/50 border-r border-white/60 flex flex-col justify-between z-10 shadow-[4px_0_24px_rgba(0,0,0,0.01)]">
+        <div>
+            <div class="p-8 flex items-center">
+                <div class="w-8 h-8 rounded-lg win11-gradient-bg shadow-md flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <span class="text-xl font-extrabold text-slate-800 tracking-tight">DrainGuard</span>
+            </div>
+            
+            <nav class="mt-4 px-4 space-y-2">
+                <a href="/" class="fluent-btn flex items-center px-4 py-3 rounded-xl hover:bg-white/40 text-slate-600 hover:text-slate-900 transition-colors">
+                    <span class="ml-3 font-medium text-sm">Live Dashboard</span>
+                </a>
+                <a href="/history" class="fluent-btn flex items-center px-4 py-3 rounded-xl hover:bg-white/40 text-slate-600 hover:text-slate-900 transition-colors">
+                    <span class="ml-3 font-medium text-sm">Event History</span>
+                </a>
+                <a href="/nodes" class="fluent-btn flex items-center px-4 py-3 rounded-xl hover:bg-white/40 text-slate-600 hover:text-slate-900 transition-colors">
+                    <span class="ml-3 font-medium text-sm">Node Manager</span>
+                </a>
+                <a href="/receiver" class="fluent-btn flex items-center px-4 py-3 win11-gradient-bg rounded-xl shadow-md text-white relative overflow-hidden group">
+                    <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-r-full shadow-sm"></div>
+                    <span class="ml-3 font-semibold text-sm">Receiver Config</span>
+                </a>
+            </nav>
+        </div>
+        
+        <div class="p-6">
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/40 border border-white/60 hover:bg-white/70 transition-colors cursor-pointer group shadow-sm">
+                <div class="flex items-center overflow-hidden">
+                    <div class="w-9 h-9 rounded-full win11-gradient-bg text-white font-bold flex items-center justify-center shadow-sm text-sm">SA</div>
+                    <div class="ml-3 truncate">
+                        <p class="text-xs font-bold text-slate-800 truncate">System Admin</p>
+                        <p class="text-[10px] text-[#0078D4] font-semibold">Active Session</p>
+                    </div>
+                </div>
+                <a href="/logout" class="text-slate-400 group-hover:text-red-500 transition-colors ml-2" title="Logout">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col overflow-y-auto relative z-10 p-10">
+        <header class="mb-10">
+            <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">Receiver Configuration</h1>
+            <p class="text-sm text-slate-500 font-medium mt-1">Manage hardware network settings and fallback Access Point.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Status Card -->
+            <div class="fluent-card backdrop-blur-2xl bg-white/60 p-8 rounded-3xl border border-white/80 shadow-sm h-fit">
+                <h2 class="text-xl font-extrabold text-slate-800 mb-6">Hardware Status</h2>
+                
+                <div class="space-y-6">
+                    <div>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Connection State</p>
+                        {% if status == 'ONLINE' %}
+                            <div class="flex items-center text-[#107C10] font-extrabold text-lg">
+                                <span class="w-3 h-3 rounded-full bg-[#107C10] animate-pulse mr-2"></span>
+                                CONNECTED
+                            </div>
+                        {% else %}
+                            <div class="flex items-center text-slate-400 font-extrabold text-lg">
+                                <span class="w-3 h-3 rounded-full bg-slate-400 mr-2"></span>
+                                DISCONNECTED
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Receiver IP Address</p>
+                        <div class="text-lg font-mono font-semibold text-slate-700 bg-white/50 backdrop-blur-md py-2 px-4 rounded-xl inline-block border border-white/80">
+                            {{ receiver_ip if receiver_ip else 'Unknown' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Network Configuration Form -->
+            <div class="lg:col-span-2 fluent-card backdrop-blur-2xl bg-white/60 p-8 rounded-3xl border border-white/80 shadow-sm">
+                <h2 class="text-xl font-extrabold text-slate-800 mb-2">Network Settings</h2>
+                <p class="text-sm text-slate-500 font-medium mb-6">Leave fields blank if you do not wish to change them. Updating these settings will automatically reboot the ESP32 receiver.</p>
+                
+                <form id="configForm" class="space-y-8">
+                    <!-- Local Network (Router) -->
+                    <div class="p-6 rounded-2xl bg-blue-500/5 border border-blue-500/10 backdrop-blur-md">
+                        <h3 class="text-sm font-extrabold text-[#0078D4] uppercase tracking-wider mb-4 flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path></svg>
+                            Primary Network (Router)
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-2">Wi-Fi Name (SSID)</label>
+                                <input type="text" id="sta_ssid" class="w-full px-4 py-3 rounded-xl border border-white/80 bg-white/50 backdrop-blur-md focus:ring-2 focus:ring-[#0078D4] outline-none transition-all" placeholder="Enter router SSID">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-2">Wi-Fi Password</label>
+                                <input type="password" id="sta_pass" class="w-full px-4 py-3 rounded-xl border border-white/80 bg-white/50 backdrop-blur-md focus:ring-2 focus:ring-[#0078D4] outline-none transition-all" placeholder="Enter router password">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fallback Network (Captive Portal) -->
+                    <div class="p-6 rounded-2xl bg-white/40 border border-white/60 backdrop-blur-md">
+                        <h3 class="text-sm font-extrabold text-slate-700 uppercase tracking-wider mb-4 flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                            Offline Fallback (Access Point)
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-2">Access Point Name</label>
+                                <input type="text" id="ap_ssid" class="w-full px-4 py-3 rounded-xl border border-white/80 bg-white/50 backdrop-blur-md focus:ring-2 focus:ring-[#0078D4] outline-none transition-all" placeholder="e.g., DrainGuard-Offline">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-2">Access Point Password</label>
+                                <input type="password" id="ap_pass" class="w-full px-4 py-3 rounded-xl border border-white/80 bg-white/50 backdrop-blur-md focus:ring-2 focus:ring-[#0078D4] outline-none transition-all" placeholder="e.g., 12345678">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="statusMessage" class="hidden font-bold text-sm px-4 py-3 rounded-xl backdrop-blur-md"></div>
+
+                    <button type="submit" class="w-full win11-gradient-bg hover:opacity-95 text-white font-bold py-3.5 rounded-xl cursor-pointer transition-all shadow-md flex justify-center items-center">
+                        <span id="btnText">Push Configuration to Receiver</span>
+                        <svg id="btnSpinner" class="hidden w-5 h-5 ml-2 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.getElementById('configForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+            const statusMsg = document.getElementById('statusMessage');
+            
+            btnText.innerText = "Sending...";
+            btnSpinner.classList.remove('hidden');
+            statusMsg.classList.add('hidden');
+            
+            const payload = {
+                sta_ssid: document.getElementById('sta_ssid').value,
+                sta_pass: document.getElementById('sta_pass').value,
+                ap_ssid: document.getElementById('ap_ssid').value,
+                ap_pass: document.getElementById('ap_pass').value
+            };
+
+            try {
+                const response = await fetch('/api/receiver/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                statusMsg.classList.remove('hidden', 'bg-red-500/10', 'text-red-600');
+                
+                if (response.ok) {
+                    statusMsg.classList.add('bg-green-500/10', 'text-green-700', 'border', 'border-green-500/20');
+                    statusMsg.innerText = "✓ " + data.message;
+                    document.getElementById('configForm').reset();
+                } else {
+                    statusMsg.classList.add('bg-red-500/10', 'text-red-600', 'border', 'border-red-500/20');
+                    statusMsg.innerText = "⚠ " + (data.error || "Failed to update configuration.");
+                }
+            } catch (error) {
+                statusMsg.classList.remove('hidden', 'bg-green-500/10', 'text-green-700');
+                statusMsg.classList.add('bg-red-500/10', 'text-red-600', 'border', 'border-red-500/20');
+                statusMsg.innerText = "⚠ Cannot reach Python server. Check connection.";
+            } finally {
+                btnText.innerText = "Push Configuration to Receiver";
+                btnSpinner.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

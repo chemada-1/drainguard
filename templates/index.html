@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - DrainGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 120, 212, 0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 120, 212, 0.4); }
+        .fluent-card { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .fluent-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -10px rgba(0, 120, 212, 0.2), 0 10px 15px -5px rgba(0, 120, 212, 0.08); }
+        .fluent-btn { transition: all 0.2s ease-in-out; }
+        .fluent-btn:active { transform: scale(0.97); }
+        .win11-gradient-bg { background: linear-gradient(135deg, rgba(0, 90, 158, 0.85) 0%, rgba(0, 120, 212, 0.85) 50%, rgba(0, 164, 239, 0.85) 100%); backdrop-filter: blur(12px); }
+        .win11-gradient-text { background: linear-gradient(135deg, #005A9E 0%, #0078D4 50%, #00A4EF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    </style>
+</head>
+<body class="bg-[#EEF2F6] text-slate-800 font-sans h-screen flex overflow-hidden relative selection:bg-blue-200">
+    
+    <!-- Translucent Windows 11 Bloom Ambient Blobs -->
+    <div class="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] bg-blue-400/30 rounded-full mix-blend-multiply filter blur-[140px] pointer-events-none animate-pulse"></div>
+    <div class="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] bg-cyan-400/25 rounded-full mix-blend-multiply filter blur-[160px] pointer-events-none animate-pulse" style="animation-delay: 3s;"></div>
+
+    <!-- Disconnected Overlay -->
+    <div id="disconnectedOverlay" class="absolute inset-0 bg-white/40 backdrop-blur-xl z-50 flex flex-col items-center justify-center transition-opacity duration-500 opacity-0 pointer-events-none hidden">
+        <div class="bg-white/70 backdrop-blur-2xl p-10 rounded-3xl border border-white/80 shadow-[0_16px_40px_rgba(0,0,0,0.08)] flex flex-col items-center max-w-md text-center transform scale-95 transition-transform duration-500" id="disconnectedModal">
+            <div class="w-20 h-20 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-6 shadow-inner">
+                <svg class="w-10 h-10 text-[#0078D4]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"></path></svg>
+            </div>
+            <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight mb-2">DrainGuard not connected</h2>
+            <p class="text-slate-500 text-sm font-medium mb-8">The dashboard cannot communicate with the receiver node. Please ensure the ESP32 is powered on and connected.</p>
+            <div class="flex gap-2 items-center justify-center text-sm font-bold text-[#0078D4] animate-pulse">
+                <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Attempting to reconnect...
+            </div>
+        </div>
+    </div>
+
+    <!-- Left Translucent Sidebar -->
+    <aside class="w-64 backdrop-blur-3xl bg-white/50 border-r border-white/60 flex flex-col justify-between z-10 shadow-[4px_0_24px_rgba(0,0,0,0.01)]">
+        <div>
+            <div class="p-8 flex items-center">
+                <div class="w-8 h-8 rounded-lg win11-gradient-bg shadow-md flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <span class="text-xl font-extrabold text-slate-800 tracking-tight">DrainGuard</span>
+            </div>
+            
+            <nav class="mt-4 px-4 space-y-2">
+                <a href="/" class="fluent-btn flex items-center px-4 py-3 win11-gradient-bg rounded-xl shadow-md text-white relative overflow-hidden group">
+                    <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-r-full shadow-sm"></div>
+                    <span class="ml-3 font-semibold text-sm">Live Dashboard</span>
+                </a>
+                <a href="/history" class="fluent-btn flex items-center px-4 py-3 rounded-xl hover:bg-white/40 text-slate-600 hover:text-slate-900 transition-colors">
+                    <span class="ml-3 font-medium text-sm">Event History</span>
+                </a>
+                <a href="/nodes" class="fluent-btn flex items-center px-4 py-3 rounded-xl hover:bg-white/40 text-slate-600 hover:text-slate-900 transition-colors">
+                    <span class="ml-3 font-medium text-sm">Node Manager</span>
+                </a>
+                <a href="/receiver" class="fluent-btn flex items-center px-4 py-3 rounded-xl hover:bg-white/40 text-slate-600 hover:text-slate-900 transition-colors">
+                    <span class="ml-3 font-medium text-sm">Receiver Config</span>
+                </a>
+            </nav>
+        </div>
+        
+        <div class="p-6">
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/40 border border-white/60 hover:bg-white/70 transition-colors cursor-pointer group shadow-sm">
+                <div class="flex items-center overflow-hidden">
+                    <div class="w-9 h-9 rounded-full win11-gradient-bg text-white font-bold flex items-center justify-center shadow-sm text-sm">SA</div>
+                    <div class="ml-3 truncate">
+                        <p class="text-xs font-bold text-slate-800 truncate">System Admin</p>
+                        <p class="text-[10px] text-[#0078D4] font-semibold">Active Session</p>
+                    </div>
+                </div>
+                <a href="/logout" class="text-slate-400 group-hover:text-red-500 transition-colors ml-2" title="Logout">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col overflow-y-auto relative z-10">
+        <header class="px-10 py-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">System Overview</h1>
+                <p class="text-sm text-slate-500 font-medium mt-1">Real-time telemetry and flood thresholds</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <select id="nodeSelect" class="fluent-btn px-4 py-2.5 backdrop-blur-xl bg-white/60 rounded-xl border border-white/80 text-sm font-semibold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#0078D4] focus:outline-none cursor-pointer">
+                    <option value="">Loading nodes...</option>
+                </select>
+                <div class="px-5 py-2.5 backdrop-blur-xl bg-white/60 rounded-xl border border-white/80 text-sm font-bold text-[#0078D4] shadow-sm flex items-center gap-2">
+                    <svg class="w-4 h-4 text-[#0078D4]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <span id="currentDate"></span>
+                </div>
+            </div>
+        </header>
+
+        <div class="px-10 pb-10 space-y-6">
+            
+            <!-- Translucent Weather Widget -->
+            <div class="fluent-card relative overflow-hidden backdrop-blur-2xl bg-white/60 p-6 rounded-3xl border border-white/80 shadow-sm flex flex-col gap-6">
+                <div class="absolute -top-10 -right-10 w-40 h-40 bg-yellow-300/30 rounded-full mix-blend-multiply filter blur-3xl"></div>
+                <div class="flex justify-between items-center w-full">
+                    <div class="flex items-center gap-6 relative z-10">
+                        <div class="text-7xl drop-shadow-md" id="wIcon">⛈️</div>
+                        <div>
+                            <div class="flex items-start">
+                                <span class="text-5xl font-extrabold text-slate-800 tracking-tighter" id="wTemp">--</span>
+                                <span class="text-2xl mt-1 win11-gradient-text font-extrabold ml-1">°C</span>
+                            </div>
+                            <div class="text-slate-600 font-semibold mt-1 flex items-center gap-1">
+                                <svg class="w-3 h-3 text-[#0078D4]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path></svg>
+                                Caloocan, Metro Manila
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative z-10 text-sm font-medium text-slate-600 space-y-2 text-right bg-white/40 backdrop-blur-md p-4 rounded-2xl border border-white/60 shadow-sm min-w-[200px]">
+                        <p class="flex justify-between gap-6">Precipitation <span id="wPrecip" class="win11-gradient-text font-extrabold">--</span></p>
+                        <p class="flex justify-between gap-6">Humidity <span id="wHumid" class="win11-gradient-text font-extrabold">--</span></p>
+                        <p class="flex justify-between gap-6">Wind <span id="wWind" class="win11-gradient-text font-extrabold">--</span></p>
+                    </div>
+                </div>
+                <div class="flex justify-between w-full border-t border-slate-200/50 pt-5 px-2 relative z-10" id="forecastDays">
+                    <div class="text-center text-sm font-medium text-slate-500 animate-pulse w-full">Loading forecast...</div>
+                </div>
+            </div>
+
+            <!-- Translucent Stat Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="fluent-card backdrop-blur-2xl bg-white/60 p-6 rounded-3xl border border-white/80 shadow-sm flex flex-col relative overflow-hidden group">
+                    <span class="text-xs win11-gradient-text font-extrabold uppercase tracking-wider">Distance Reading</span>
+                    <div class="flex items-end justify-between mt-4">
+                        <span class="text-4xl font-extrabold text-slate-800" id="valDistance">-- cm</span>
+                        <div class="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-[#0078D4] text-lg">📏</div>
+                    </div>
+                </div>
+                
+                <div class="fluent-card backdrop-blur-2xl bg-white/60 p-6 rounded-3xl border border-white/80 shadow-sm flex flex-col relative overflow-hidden group">
+                    <span class="text-xs text-slate-500 font-bold uppercase tracking-wider">System Status</span>
+                    <div class="flex items-end justify-between mt-4">
+                        <span class="text-xl font-extrabold text-slate-800 whitespace-nowrap" id="valStatus">AWAITING</span>
+                        <div class="w-10 h-10 rounded-full bg-white/80 border border-slate-200/60 flex items-center justify-center text-slate-400 text-lg flex-shrink-0 ml-2" id="iconStatus">⏳</div>
+                    </div>
+                </div>
+
+                <div class="fluent-card backdrop-blur-2xl bg-white/60 p-6 rounded-3xl border border-white/80 shadow-sm flex flex-col relative overflow-hidden group">
+                    <span class="text-xs text-slate-500 font-bold uppercase tracking-wider">Radio Signal</span>
+                    <div class="flex items-end justify-between mt-4">
+                        <span class="text-4xl font-extrabold text-slate-800" id="valRSSI">-- dBm</span>
+                        <div class="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-[#00A4EF] text-lg">📡</div>
+                    </div>
+                </div>
+
+                <!-- Updated Health Widget -->
+                <div class="fluent-card backdrop-blur-2xl bg-white/60 p-6 rounded-3xl border border-white/80 shadow-sm flex flex-col relative overflow-hidden group">
+                    <span class="text-xs text-slate-500 font-bold uppercase tracking-wider">Node Health</span>
+                    <div class="flex items-end justify-between mt-4">
+                        <span class="text-3xl font-extrabold text-slate-800" id="valHealth">--</span>
+                        <div class="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 text-lg">❤️</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Translucent Graph Section -->
+            <div class="fluent-card backdrop-blur-2xl bg-white/60 p-8 rounded-3xl border border-white/80 shadow-sm">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="text-xl font-extrabold text-slate-800 tracking-tight" id="chartTitle">Live Telemetry</h3>
+                        <p class="text-xs text-slate-500 font-medium mt-1">Y-Axis represents rising water depth (0 cm = Empty, 200 cm = Overflow)</p>
+                    </div>
+                    <span class="flex items-center text-xs font-bold text-white win11-gradient-bg backdrop-blur-md px-4 py-1.5 rounded-full shadow-sm">
+                        <span class="w-2 h-2 rounded-full bg-white animate-pulse mr-2 shadow-[0_0_8px_rgba(255,255,255,0.8)]"></span> LIVE
+                    </span>
+                </div>
+                <div class="h-80 w-full relative">
+                    <canvas id="waterChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+    </main>
+    
+    <script>
+        const MAX_CANAL_DEPTH = 200; 
+        const MAX_CHART_POINTS = 30; 
+        let isConnected = true; 
+
+        const dateOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+        document.getElementById('currentDate').innerText = new Date().toLocaleDateString('en-US', dateOptions);
+
+        Chart.defaults.font.family = 'Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+        const ctx = document.getElementById('waterChart').getContext('2d');
+        
+        let gradientFill = ctx.createLinearGradient(0, 0, 0, 400);
+        gradientFill.addColorStop(0, 'rgba(0, 120, 212, 0.35)');
+        gradientFill.addColorStop(1, 'rgba(0, 164, 239, 0.0)');
+
+        const waterChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Water Height (cm)',
+                    data: [],
+                    borderColor: '#0078D4',
+                    backgroundColor: gradientFill,
+                    borderWidth: 3,
+                    pointBackgroundColor: '#FFFFFF',
+                    pointBorderColor: '#0078D4',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    fill: true,
+                    tension: 0.4 
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: MAX_CANAL_DEPTH,
+                        title: { display: false },
+                        grid: { color: 'rgba(0, 0, 0, 0.03)', drawBorder: false },
+                        ticks: { color: '#64748B', font: { weight: '600', size: 11 }, padding: 10 }
+                    },
+                    x: {
+                        grid: { display: false, drawBorder: false },
+                        ticks: { color: '#64748B', font: { weight: '600', size: 11 }, maxTicksLimit: 8 }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                        titleColor: '#1E293B',
+                        bodyColor: '#334155',
+                        borderColor: 'rgba(0,0,0,0.06)',
+                        borderWidth: 1,
+                        padding: 12,
+                        boxPadding: 6,
+                        usePointStyle: true,
+                        callbacks: {
+                            label: function(context) {
+                                return `Depth: ${context.parsed.y} cm (Clearance: ${MAX_CANAL_DEPTH - context.parsed.y} cm)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        const nodeSelect = document.getElementById('nodeSelect');
+        const chartTitle = document.getElementById('chartTitle');
+        const overlay = document.getElementById('disconnectedOverlay');
+        const modal = document.getElementById('disconnectedModal');
+
+        function toggleConnectionUI(connected) {
+            if (connected === isConnected) return; 
+            isConnected = connected;
+
+            if (!connected) {
+                overlay.classList.remove('hidden');
+                setTimeout(() => {
+                    overlay.classList.remove('opacity-0', 'pointer-events-none');
+                    overlay.classList.add('opacity-100');
+                    modal.classList.remove('scale-95');
+                    modal.classList.add('scale-100');
+                }, 10);
+            } else {
+                overlay.classList.remove('opacity-100');
+                overlay.classList.add('opacity-0', 'pointer-events-none');
+                modal.classList.remove('scale-100');
+                modal.classList.add('scale-95');
+                setTimeout(() => { overlay.classList.add('hidden'); }, 500);
+            }
+        }
+
+        function getWeatherIcon(code) {
+            if (code === 0) return '☀️';
+            if (code <= 3) return '⛅';
+            if (code <= 67) return '🌧️';
+            if (code >= 95) return '⛈️';
+            return '☁️';
+        }
+
+        async function fetchWeather() {
+            try {
+                const url = 'https://api.open-meteo.com/v1/forecast?latitude=14.6571&longitude=120.9841&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FManila';
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                document.getElementById('wTemp').innerText = Math.round(data.current.temperature_2m);
+                document.getElementById('wPrecip').innerText = data.current.precipitation + ' mm';
+                document.getElementById('wHumid').innerText = data.current.relative_humidity_2m + '%';
+                document.getElementById('wWind').innerText = data.current.wind_speed_10m + ' km/h';
+                document.getElementById('wIcon').innerText = getWeatherIcon(data.current.weather_code);
+
+                const forecastContainer = document.getElementById('forecastDays');
+                forecastContainer.innerHTML = ''; 
+                
+                for (let i = 0; i < 7; i++) {
+                    const dateObj = new Date(data.daily.time[i]);
+                    const dayName = i === 0 ? 'Today' : dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+                    const maxT = Math.round(data.daily.temperature_2m_max[i]);
+                    const minT = Math.round(data.daily.temperature_2m_min[i]);
+                    const icon = getWeatherIcon(data.daily.weather_code[i]);
+                    
+                    forecastContainer.innerHTML += `
+                        <div class="flex flex-col items-center justify-center space-y-1.5 px-2 py-1 rounded-xl hover:bg-white/40 transition-colors cursor-pointer">
+                            <span class="text-xs font-bold text-slate-500">${dayName}</span>
+                            <span class="text-2xl drop-shadow-sm">${icon}</span>
+                            <div class="text-sm font-extrabold text-slate-800">${maxT}° <span class="text-xs font-semibold text-slate-400 ml-1">${minT}°</span></div>
+                        </div>
+                    `;
+                }
+            } catch (error) {}
+        }
+
+        async function loadNodes() {
+            try {
+                const response = await fetch('/api/nodes');
+                const nodes = await response.json();
+                
+                nodeSelect.innerHTML = ''; 
+                
+                if(nodes.length === 0) {
+                    nodeSelect.innerHTML = '<option value="">No nodes registered</option>';
+                    chartTitle.innerText = `Live Telemetry`;
+                    return;
+                }
+
+                nodes.forEach(node => {
+                    const option = document.createElement('option');
+                    option.value = node.id;
+                    option.textContent = `Node-${node.id} (${node.name})`;
+                    nodeSelect.appendChild(option);
+                });
+                
+                chartTitle.innerText = `Live Telemetry: Node-${nodes[0].id} (${nodes[0].name})`;
+                fetchSensorData();
+            } catch(e) {
+                console.error("Failed to load nodes", e);
+            }
+        }
+
+        async function fetchSensorData() {
+            if (!nodeSelect.value) return;
+
+            try {
+                const nodeId = nodeSelect.value;
+                const response = await fetch('/api/data?node=' + nodeId);
+                
+                if (response.status === 503) {
+                    toggleConnectionUI(false);
+                    return;
+                }
+                
+                if (!response.ok) throw new Error("Network issue");
+                
+                const data = await response.json();
+                toggleConnectionUI(true); 
+
+                const rawDistance = data.distance;
+                let waterHeight = MAX_CANAL_DEPTH - rawDistance;
+                if (waterHeight < 0) waterHeight = 0;
+
+                document.getElementById('valDistance').innerText = rawDistance + ' cm';
+                document.getElementById('valRSSI').innerText = data.rssi + ' dBm';
+
+                // Health Logic based on connection and signal strength
+                const valHealth = document.getElementById('valHealth');
+                if (data.status === "OFFLINE") {
+                    valHealth.innerText = "OFFLINE";
+                    valHealth.className = "text-3xl font-extrabold text-slate-400";
+                } else if (data.rssi < -100) {
+                    valHealth.innerText = "WEAK";
+                    valHealth.className = "text-3xl font-extrabold text-yellow-600";
+                } else {
+                    valHealth.innerText = "GOOD";
+                    valHealth.className = "text-3xl font-extrabold text-emerald-600";
+                }
+
+                const statusIcon = document.getElementById('iconStatus');
+                const statusText = document.getElementById('valStatus');
+                
+                if (data.status === "OFFLINE") {
+                    statusText.innerText = "OFFLINE";
+                    statusText.className = "text-xl font-extrabold text-slate-400 whitespace-nowrap";
+                    statusIcon.className = "w-10 h-10 rounded-full bg-white/80 border border-slate-200/60 flex items-center justify-center text-slate-400 text-lg flex-shrink-0 ml-2";
+                    statusIcon.innerText = "✕";
+                } else if (data.status === "CRITICAL FLOOD") {
+                    statusText.innerText = "CRITICAL";
+                    statusText.className = "text-xl font-extrabold text-[#D13438] whitespace-nowrap animate-pulse";
+                    statusIcon.className = "w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-[#D13438] text-lg flex-shrink-0 ml-2 animate-pulse";
+                    statusIcon.innerText = "⚠";
+                    
+                    let redGradient = ctx.createLinearGradient(0, 0, 0, 400);
+                    redGradient.addColorStop(0, 'rgba(209, 52, 56, 0.35)');
+                    redGradient.addColorStop(1, 'rgba(209, 52, 56, 0.0)');
+                    waterChart.data.datasets[0].borderColor = '#D13438';
+                    waterChart.data.datasets[0].backgroundColor = redGradient;
+                    waterChart.data.datasets[0].pointBorderColor = '#D13438';
+                } else {
+                    statusText.innerText = "NORMAL";
+                    statusText.className = "text-xl font-extrabold text-[#107C10] whitespace-nowrap";
+                    statusIcon.className = "w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-[#107C10] text-lg flex-shrink-0 ml-2";
+                    statusIcon.innerText = "✓";
+                    
+                    waterChart.data.datasets[0].borderColor = '#0078D4';
+                    waterChart.data.datasets[0].backgroundColor = gradientFill;
+                    waterChart.data.datasets[0].pointBorderColor = '#0078D4';
+                }
+
+                if (data.status !== "OFFLINE") {
+                    const now = new Date();
+                    const timeString = now.toLocaleTimeString('en-US', { hour12: false });
+                    
+                    waterChart.data.labels.push(timeString);
+                    waterChart.data.datasets[0].data.push(waterHeight);
+
+                    if (waterChart.data.labels.length > MAX_CHART_POINTS) {
+                        waterChart.data.labels.shift();
+                        waterChart.data.datasets[0].data.shift();
+                    }
+                    waterChart.update('active'); 
+                }
+
+            } catch(e) {
+                toggleConnectionUI(false);
+            }
+        }
+
+        nodeSelect.addEventListener('change', (e) => {
+            const selectedText = e.target.options[e.target.selectedIndex].text;
+            chartTitle.innerText = `Live Telemetry: ${selectedText}`;
+            
+            waterChart.data.labels = [];
+            waterChart.data.datasets[0].data = [];
+            waterChart.update();
+            
+            fetchSensorData();
+        });
+
+        fetchWeather();
+        loadNodes();
+
+        setInterval(fetchSensorData, 2000); 
+        setInterval(fetchWeather, 600000);  
+    </script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - DrainGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-blue-50 flex items-center justify-center h-screen font-sans">
+    
+    <div class="bg-white p-10 rounded-2xl shadow-xl max-w-sm w-full border border-blue-100">
+        
+        <h2 class="text-3xl font-extrabold text-center text-blue-950 mb-8 tracking-tight">DrainGuard</h2>
+        
+        {% if error %}
+        <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded mb-6 text-sm font-medium">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form action="{{ url_for('login') }}" method="POST" class="space-y-5">
+            <div>
+                <label class="block text-sm font-semibold text-blue-900 mb-1">Email</label>
+                <input type="email" name="username" placeholder="Enter email" class="w-full px-4 py-3 bg-blue-50/50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-semibold text-blue-900 mb-1">Password</label>
+                <input type="password" name="password" placeholder="••••••••" class="w-full px-4 py-3 bg-blue-50/50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+            </div>
+            
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-md mt-2">
+                Sign In
+            </button>
+        </form>
+        
+    </div>
+
+</body>
+</html>
